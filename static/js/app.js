@@ -126,7 +126,16 @@ function displayCheckerResults(data) {
     const div = document.createElement("div");
     div.className = "sentence-item";
     div.style.animationDelay = (i * 0.03) + "s";
-    div.innerHTML = `<div class="s-bar ${s.level}"></div><div class="s-text">${esc(s.sentence)}</div><span class="s-score ${s.level}">${s.score}%</span>`;
+    let matchHtml = "";
+    if (s.matched_with) {
+      if (s.matched_with.startsWith("http")) {
+        const url = s.matched_with.split(" ")[0];
+        matchHtml = `<div style="font-size:12px;color:var(--text3);margin-top:4px;">Source: <a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none;">${url}</a></div>`;
+      } else {
+        matchHtml = `<div style="font-size:12px;color:var(--text3);margin-top:4px;">Source: ${esc(s.matched_with)}</div>`;
+      }
+    }
+    div.innerHTML = `<div class="s-bar ${s.level}"></div><div class="s-text" style="flex:1;">${esc(s.sentence)}${matchHtml}</div><span class="s-score ${s.level}">${s.score}%</span>`;
     list.appendChild(div);
   });
 }
@@ -333,7 +342,18 @@ async function generateReport() {
           <div class="stat-card"><div class="stat-label">ORIGINAL</div><div class="stat-value" style="color:var(--low);font-size:22px">${_reportResult.low_risk}</div></div>
         </div>
         <div style="font-size:13px;color:var(--text2);font-style:italic;margin-bottom:14px">${_reportResult.summary}</div>
-        ${_reportResult.sentences.map(s=>`<div class="sentence-item"><div class="s-bar ${s.level}"></div><div class="s-text">${esc(s.sentence)}</div><span class="s-score ${s.level}">${s.score}%</span></div>`).join("")}
+        ${_reportResult.sentences.map(s=>{
+          let matchHtml = "";
+          if (s.matched_with) {
+            if (s.matched_with.startsWith("http")) {
+              const url = s.matched_with.split(" ")[0];
+              matchHtml = `<div style="font-size:11px;color:var(--text3);margin-top:2px;">Source: <a href="${url}" target="_blank" style="color:var(--accent);">${url}</a></div>`;
+            } else {
+              matchHtml = `<div style="font-size:11px;color:var(--text3);margin-top:2px;">Source: ${esc(s.matched_with)}</div>`;
+            }
+          }
+          return `<div class="sentence-item"><div class="s-bar ${s.level}"></div><div class="s-text" style="flex:1;">${esc(s.sentence)}${matchHtml}</div><span class="s-score ${s.level}">${s.score}%</span></div>`;
+        }).join("")}
       </div>`;
     document.getElementById("dlBtn").style.display = "inline-flex";
     toast("Report ready!", "success");

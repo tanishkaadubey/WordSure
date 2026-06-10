@@ -2,6 +2,11 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import re
 import numpy as np
+import os
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -33,6 +38,24 @@ REFERENCE_TEXTS = [
     "The human genome contains approximately 3 billion base pairs of DNA.",
 ]
 
+def query_serper(query):
+    api_key = os.getenv("SERPER_API_KEY")
+    if not api_key:
+        return None
+    url = "https://google.serper.dev/search"
+    payload = {"q": query, "num": 3}
+    headers = {
+        'X-API-KEY': api_key,
+        'Content-Type': 'application/json'
+    }
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Serper error: {e}")
+        return None
+
 def split_sentences(text):
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     return [s.strip() for s in sentences if len(s.strip()) > 15]
@@ -41,10 +64,36 @@ def check_plagiarism(text):
     sentences = split_sentences(text)
     if not sentences:
         return {"overall_score": 0, "sentences": [], "summary": "No meaningful sentences found.",
-                "total_sentences": 0, "high_risk": 0, "medium_risk": 0, "low_risk": 0}
+                "total_sentences": 0, "high_risk": 0, "medium_risk": 0, "low_risk": 0, "engine": "offline"}
+
+    # Extract up to 3 longest sentences > 30 chars
+    long_sentences = [s for s in sentences if len(s) > 30]
+    query_sentences = sorted(long_sentences, key=len, reverse=True)[:3]
+
+    online_references = []
+    used_engine = "offline"
+
+    for q_sent in query_sentences:
+        serper_res = query_serper(q_sent)
+        if serper_res and "organic" in serper_res:
+            used_engine = "serper"
+            for item in serper_res["organic"]:
+                snippet = item.get("snippet", "")
+                link = item.get("link", "")
+                if snippet:
+                    online_references.append({"text": snippet, "url": link})
+            continue
+
+    if not online_references:
+        reference_texts = REFERENCE_TEXTS
+        reference_urls = [None] * len(REFERENCE_TEXTS)
+        used_engine = "offline"
+    else:
+        reference_texts = [ref["text"] for ref in online_references]
+        reference_urls = [ref["url"] for ref in online_references]
 
     sentence_embeddings = model.encode(sentences)
-    reference_embeddings = model.encode(REFERENCE_TEXTS)
+    reference_embeddings = model.encode(reference_texts)
 
     results = []
     total_score = 0
@@ -62,11 +111,19 @@ def check_plagiarism(text):
         else:
             level = "low"
 
+        matched_with = None
+        if best_score > 0.45:
+            if reference_urls[best_match_idx]:
+                snippet_preview = reference_texts[best_match_idx][:50] + "..." if len(reference_texts[best_match_idx]) > 50 else reference_texts[best_match_idx]
+                matched_with = f"{reference_urls[best_match_idx]} (Snippet: {snippet_preview})"
+            else:
+                matched_with = reference_texts[best_match_idx]
+
         results.append({
             "sentence": sentence,
             "score": similarity_percent,
             "level": level,
-            "matched_with": REFERENCE_TEXTS[best_match_idx] if best_score > 0.45 else None
+            "matched_with": matched_with
         })
         total_score += similarity_percent
 
@@ -88,5 +145,6 @@ def check_plagiarism(text):
         "medium_risk": medium_count,
         "low_risk": len(sentences) - high_count - medium_count,
         "sentences": results,
-        "summary": summary
+        "summary": summary,
+        "engine": used_engine
     }

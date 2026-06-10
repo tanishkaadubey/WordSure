@@ -6,3 +6,4 @@ numpy
 requests
 aiofiles
 python-multipart
+python-dotenv
