@@ -191,7 +191,9 @@ async function runCorrection() {
   if (!raw) { toast("Enter sentences to correct", "error"); return; }
   const sentences = raw.split("\n").map(s => s.trim()).filter(Boolean);
   const btn = document.getElementById("corrBtn");
+  const hBtn = document.getElementById("humanizeBtn");
   btn.disabled = true;
+  if (hBtn) hBtn.disabled = true;
   btn.innerHTML = `<span class="spinner dark"></span> Rewriting with AI...`;
   document.getElementById("corrEmpty").style.display = "none";
   const res = document.getElementById("corrResults");
@@ -224,9 +226,61 @@ async function runCorrection() {
     toast("Correction failed", "error");
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Rewrite with Mistral AI`;
+    const hBtn = document.getElementById("humanizeBtn");
+    if (hBtn) hBtn.disabled = false;
+    btn.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Rewrite with AI`;
   }
 }
+
+async function runHumanize() {
+  const raw = document.getElementById("corrText")?.value.trim();
+  if (!raw) { toast("Enter sentences to humanize", "error"); return; }
+  const sentences = raw.split("\n").map(s => s.trim()).filter(Boolean);
+  const btn = document.getElementById("humanizeBtn");
+  const corrBtn = document.getElementById("corrBtn");
+  btn.disabled = true;
+  if (corrBtn) corrBtn.disabled = true;
+  
+  const originalBtnContent = btn.innerHTML;
+  btn.innerHTML = `<span class="spinner dark"></span> Humanizing...`;
+  document.getElementById("corrEmpty").style.display = "none";
+  const res = document.getElementById("corrResults");
+  res.style.display = "flex";
+  res.innerHTML = `<div class="card" style="text-align:center;padding:30px"><span class="spinner"></span><div style="margin-top:10px;color:var(--text2);font-size:13px">Mistral is humanizing ${sentences.length} sentence${sentences.length > 1 ? "s" : ""}...</div></div>`;
+  
+  try {
+    const r = await fetch(`${API}/api/humanize`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sentences })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    res.innerHTML = "";
+    data.humanized.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <div class="correction-grid">
+          <div><div class="corr-label orig">ORIGINAL</div><div class="corr-box orig">${esc(c.original)}</div></div>
+          <div><div class="corr-label fixed">HUMANIZED</div><div class="corr-box fixed">${esc(c.humanized)}</div></div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="navigator.clipboard.writeText(${JSON.stringify(c.humanized).replace(/"/g, '&quot;')}).then(()=>toast('Copied!','success'))">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy humanized text
+        </button>`;
+      res.appendChild(div);
+    });
+    toast("All sentences humanized!", "success");
+  } catch (e) {
+    res.innerHTML = `<div class="card"><div style="color:var(--high);font-size:13px">Error: ${e.message}</div></div>`;
+    toast("Humanization failed", "error");
+  } finally {
+    btn.disabled = false;
+    if (corrBtn) corrBtn.disabled = false;
+    btn.innerHTML = originalBtnContent;
+  }
+}
+
 
 // ---- CHATBOT ----
 async function sendChat() {
@@ -285,10 +339,44 @@ async function loadDashboard() {
     if (!d.recent?.length) { rc.innerHTML = `<div style="color:var(--text3);font-size:13px">No checks yet. <a onclick="nav('checker')" style="color:var(--accent);cursor:pointer">Run your first check →</a></div>`; return; }
     rc.innerHTML = d.recent.map(r => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text2)">${r.date}</span>
-        <span class="badge ${r.score >= 70 ? 'badge-high' : r.score >= 40 ? 'badge-medium' : 'badge-low'}">${r.score}%</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:13px;color:var(--text2)">${r.date}</span>
+          <span class="badge ${r.score >= 70 ? 'badge-high' : r.score >= 40 ? 'badge-medium' : 'badge-low'}">${r.score}%</span>
+        </div>
+        <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px" onclick="exportHistoryPDF('${r.date}', ${r.score})">PDF</button>
       </div>`).join("");
   } catch { }
+}
+
+function exportHistoryPDF(date, score) {
+  const container = document.createElement("div");
+  container.innerHTML = `
+    <h2>WordSure Quick Report</h2>
+    <p><strong>Date:</strong> ${date}</p>
+    <p><strong>Plagiarism Score:</strong> ${score}%</p>
+    <p><em>Log in to history to see full details.</em></p>
+  `;
+  container.style.padding = "40px";
+  container.style.fontFamily = "Inter, sans-serif";
+  const opt = {
+    margin: 1,
+    filename: `WordSure_Summary_${date}.pdf`,
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+  toast("Generating PDF...", "info");
+  
+  // html2pdf requires element in DOM
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  document.body.appendChild(container);
+  
+  html2pdf().set(opt).from(container).save().then(() => {
+    toast("PDF downloaded!", "success");
+    document.body.removeChild(container);
+  }).catch(() => {
+    toast("PDF generation failed", "error");
+    document.body.removeChild(container);
+  });
 }
 
 // ---- HISTORY ----
@@ -356,9 +444,55 @@ async function generateReport() {
         }).join("")}
       </div>`;
     document.getElementById("dlBtn").style.display = "inline-flex";
+    document.getElementById("pdfBtn").style.display = "inline-flex";
     toast("Report ready!", "success");
   } catch (e) { toast("Error: " + e.message, "error"); }
   finally { btn.disabled = false; btn.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Analyze & Preview`; }
+}
+
+function exportPDF() {
+  const element = document.getElementById("reportPreview");
+  if (!element || !element.innerHTML) { toast("No report to export", "error"); return; }
+  
+  toast("Generating PDF...", "info");
+  
+  // Create a temporary container to render the PDF properly without dark mode styles messing it up
+  const container = document.createElement("div");
+  container.innerHTML = element.innerHTML;
+  container.style.padding = "40px";
+  container.style.background = "#ffffff";
+  container.style.color = "#000000";
+  container.style.fontFamily = "Inter, sans-serif";
+  container.style.width = "800px";
+  
+  // Remove dark mode specific classes or variables if needed
+  const cards = container.querySelectorAll('.card');
+  cards.forEach(c => {
+    c.style.background = "#ffffff";
+    c.style.border = "1px solid #e2e8f0";
+    c.style.boxShadow = "none";
+  });
+
+  const opt = {
+    margin:       0.5,
+    filename:     `WordSure_Report_${Date.now()}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+  
+  // html2pdf/html2canvas requires the element to be in the DOM to render correctly
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  document.body.appendChild(container);
+  
+  html2pdf().set(opt).from(container).save().then(() => {
+    toast("PDF downloaded!", "success");
+    document.body.removeChild(container);
+  }).catch(e => {
+    toast("PDF generation failed", "error");
+    document.body.removeChild(container);
+  });
 }
 
 function downloadReport() {

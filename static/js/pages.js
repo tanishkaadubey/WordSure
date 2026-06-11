@@ -200,10 +200,16 @@ correction: (data) => `<div class="page">
       <div class="card-title" style="margin-bottom:4px">Sentences to Fix</div>
       <div class="card-sub" style="margin-bottom:14px">Paste flagged sentences or come from checker</div>
       <textarea class="form-textarea" id="corrText" style="min-height:220px" placeholder="Paste one sentence per line that needs rewriting..."></textarea>
-      <button class="btn btn-primary" style="margin-top:12px;width:100%;justify-content:center" id="corrBtn" onclick="runCorrection()">
-        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-        Rewrite with Mistral AI
-      </button>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn btn-primary" style="flex:1;justify-content:center" id="corrBtn" onclick="runCorrection()">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Rewrite with AI
+        </button>
+        <button class="btn btn-purple" style="flex:1;justify-content:center" id="humanizeBtn" onclick="runHumanize()">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Humanize Text
+        </button>
+      </div>
     </div>
     <div>
       <div id="corrEmpty" class="card" style="text-align:center;padding:60px 20px">
@@ -267,7 +273,11 @@ reports: () => `<div class="page">
       </button>
       <button class="btn btn-secondary" id="dlBtn" style="display:none" onclick="downloadReport()">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download Report
+        Download TXT
+      </button>
+      <button class="btn btn-purple" id="pdfBtn" style="display:none" onclick="exportPDF()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Export PDF
       </button>
     </div>
   </div>

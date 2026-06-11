@@ -71,6 +71,9 @@ class ChatInput(BaseModel):
 class CorrectInput(BaseModel):
     sentences: List[str]
 
+class HumanizeInput(BaseModel):
+    sentences: List[str]
+
 class ProfileUpdate(BaseModel):
     name: str
     email: str
@@ -153,7 +156,7 @@ Rewritten:"""
         try:
             response = requests.post(OLLAMA_URL, json={
                 "model": MODEL, "prompt": prompt, "stream": False
-            }, timeout=60)
+            }, timeout=180)
             if response.status_code == 200:
                 result = response.json().get("response", sentence).strip()
                 corrected.append({"original": sentence, "corrected": result})
@@ -162,6 +165,64 @@ Rewritten:"""
         except Exception as e:
             corrected.append({"original": sentence, "corrected": sentence, "error": str(e)})
     return {"corrections": corrected}
+
+def apply_human_formatting_rules(text: str) -> str:
+    # Rule-based tweaks to remove common AI fingerprints
+    replacements = {
+        "It is important to note that ": "",
+        "Furthermore, ": "Also, ",
+        "In conclusion, ": "To wrap up, ",
+        "Additionally, ": "Plus, ",
+        "delve into": "look into",
+        "tapestry": "mix",
+        "realm": "area",
+        "pivotal": "key"
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+        text = text.replace(old.lower(), new.lower())
+    return text
+
+@app.post("/api/humanize")
+async def humanize(input: HumanizeInput):
+    humanized = []
+    for sentence in input.sentences:
+        # Phase 1 & 2: Advanced Prompting & Burstiness
+        prompt = f"""You are an expert human copywriter. Rewrite this text to sound completely natural and human-like. 
+Your goal is to bypass AI detectors.
+Rules:
+1. Increase burstiness: Mix very short sentences with longer ones.
+2. Increase perplexity: Use natural, conversational vocabulary.
+3. DO NOT use AI buzzwords like: delve, furthermore, tapestry, realm, pivotal.
+4. Keep the original meaning intact.
+5. Return ONLY the rewritten text, no explanation.
+
+Text: {sentence}
+
+Rewritten:"""
+        try:
+            # High temperature for more randomness
+            response = requests.post(OLLAMA_URL, json={
+                "model": MODEL, 
+                "prompt": prompt, 
+                "stream": False,
+                "options": {
+                    "temperature": 0.95,
+                    "top_p": 0.95
+                }
+            }, timeout=180)
+            if response.status_code == 200:
+                result = response.json().get("response", sentence).strip()
+                
+                # Phase 3: Programmatic cleanup
+                result = apply_human_formatting_rules(result)
+                
+                humanized.append({"original": sentence, "humanized": result})
+            else:
+                humanized.append({"original": sentence, "humanized": sentence})
+        except Exception as e:
+            humanized.append({"original": sentence, "humanized": sentence, "error": str(e)})
+    return {"humanized": humanized}
 
 @app.post("/api/chat")
 async def chat(input: ChatInput):
