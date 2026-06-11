@@ -56,6 +56,31 @@ def query_serper(query):
         print(f"Serper error: {e}")
         return None
 
+def query_tavily(query):
+    api_key = os.getenv("TAVILY_API_KEY")
+    if not api_key:
+        return None
+    url = "https://api.tavily.com/search"
+    payload = {
+        "api_key": api_key,
+        "query": query,
+        "search_depth": "basic",
+        "include_answer": False,
+        "include_images": False,
+        "include_raw_content": False,
+        "max_results": 3
+    }
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Tavily error: {e}")
+        return None
+
 def split_sentences(text):
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
     return [s.strip() for s in sentences if len(s.strip()) > 15]
@@ -74,6 +99,7 @@ def check_plagiarism(text):
     used_engine = "offline"
 
     for q_sent in query_sentences:
+        # First preference: Serper
         serper_res = query_serper(q_sent)
         if serper_res and "organic" in serper_res:
             used_engine = "serper"
@@ -82,6 +108,17 @@ def check_plagiarism(text):
                 link = item.get("link", "")
                 if snippet:
                     online_references.append({"text": snippet, "url": link})
+            continue
+
+        # Second preference: Tavily (if Serper fails or has no key)
+        tavily_res = query_tavily(q_sent)
+        if tavily_res and "results" in tavily_res:
+            used_engine = "tavily"
+            for item in tavily_res["results"]:
+                content = item.get("content", "")
+                url = item.get("url", "")
+                if content:
+                    online_references.append({"text": content, "url": url})
             continue
 
     if not online_references:
