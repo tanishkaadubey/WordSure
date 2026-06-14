@@ -343,11 +343,14 @@ login: () => `<div class="page" style="display:flex;align-items:center;justify-c
       <p style="color:var(--text2);font-size:13px;margin-top:4px">Sign in to WordSure</p>
     </div>
     <div class="card">
-      <div class="form-group"><label class="form-label">EMAIL</label><input class="form-input" id="loginEmail" type="email" placeholder="you@example.com"/></div>
-      <div class="form-group"><label class="form-label">PASSWORD</label><input class="form-input" id="loginPass" type="password" placeholder="••••••••"/></div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" onclick="doLogin()">Sign In</button>
-      <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text2)">
-        Don't have an account? <a onclick="nav('signup')" style="color:var(--accent);cursor:pointer">Sign up</a>
+      <div class="form-group"><label class="form-label">EMAIL</label><input class="form-input" id="loginEmail" type="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <div class="form-group"><label class="form-label">PASSWORD</label><input class="form-input" id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <div style="text-align:right;margin-bottom:16px;font-size:12px;">
+        <a onclick="nav('reset')" style="color:var(--accent);cursor:pointer;text-decoration:none;">Forgot password?</a>
+      </div>
+      <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button>
+      <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--text2)">
+        Don't have an account? <a onclick="nav('signup')" style="color:var(--accent);cursor:pointer;font-weight:600">Sign up</a>
       </div>
     </div>
   </div>
@@ -364,9 +367,27 @@ signup: () => `<div class="page" style="display:flex;align-items:center;justify-
       <div class="form-group"><label class="form-label">FULL NAME</label><input class="form-input" id="suName" placeholder="Tanishka Dubey"/></div>
       <div class="form-group"><label class="form-label">EMAIL</label><input class="form-input" id="suEmail" type="email" placeholder="you@example.com"/></div>
       <div class="form-group"><label class="form-label">PASSWORD</label><input class="form-input" id="suPass" type="password" placeholder="••••••••"/></div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" onclick="toast('Account created! Welcome to WordSure.','success');nav('home')">Create Account</button>
-      <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text2)">
-        Already have an account? <a onclick="nav('login')" style="color:var(--accent);cursor:pointer">Sign in</a>
+      <button class="btn btn-primary" id="signupBtn" style="width:100%;justify-content:center;margin-top:4px" onclick="doSignup()">Create Account</button>
+      <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--text2)">
+        Already have an account? <a onclick="nav('login')" style="color:var(--accent);cursor:pointer;font-weight:600">Sign in</a>
+      </div>
+    </div>
+  </div>
+</div>`,
+
+reset: () => `<div class="page" style="display:flex;align-items:center;justify-content:center;min-height:70vh">
+  <div style="width:100%;max-width:400px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div class="logo-icon" style="width:48px;height:48px;border-radius:12px;font-size:24px;margin:0 auto 12px"></div>
+      <h2 style="font-family:var(--font-d);font-size:24px;font-weight:800">Reset Password</h2>
+      <p style="color:var(--text2);font-size:13px;margin-top:4px">Enter your email and new password</p>
+    </div>
+    <div class="card">
+      <div class="form-group"><label class="form-label">EMAIL</label><input class="form-input" id="resetEmail" type="email" placeholder="you@example.com"/></div>
+      <div class="form-group"><label class="form-label">NEW PASSWORD</label><input class="form-input" id="resetPass" type="password" placeholder="••••••••"/></div>
+      <button class="btn btn-primary" id="resetBtn" style="width:100%;justify-content:center;margin-top:4px" onclick="doResetPassword()">Update Password</button>
+      <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--text2)">
+        Remembered your password? <a onclick="nav('login')" style="color:var(--accent);cursor:pointer;font-weight:600">Sign in</a>
       </div>
     </div>
   </div>
@@ -378,5 +399,5 @@ const PAGE_TITLES = {
   home:'Home', dashboard:'Dashboard', checker:'Plagiarism Checker',
   correction:'AI Correction', chatbot:'AI Chatbot', history:'History',
   reports:'Reports', about:'About WordSure', profile:'My Profile',
-  login:'Sign In', signup:'Sign Up'
+  login:'Sign In', signup:'Sign Up', reset:'Reset Password'
 };

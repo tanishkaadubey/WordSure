@@ -3,20 +3,56 @@ let _chatHistory = [];
 let _lastResult = null;
 let _reportResult = null;
 
+function getToken() { return localStorage.getItem("wordsure_token"); }
+function setToken(t) { localStorage.setItem("wordsure_token", t); }
+function removeToken() { localStorage.removeItem("wordsure_token"); }
+
+async function authFetch(url, options = {}) {
+  const token = getToken();
+  if (!options.headers) options.headers = {};
+  if (token) {
+    options.headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    removeToken();
+    nav("login");
+    toast("Session expired. Please log in again.", "error");
+    throw new Error("Unauthorized");
+  }
+  return res;
+}
+
 // ---- NAVIGATION ----
 function nav(page, data) {
+  const isAuthPage = ['login', 'signup', 'reset'].includes(page);
+  if (!getToken() && !isAuthPage) {
+    page = 'login';
+  }
+  
   const content = document.getElementById("pageContent");
   content.innerHTML = PAGES[page] ? PAGES[page](data) : PAGES.home();
   document.getElementById("topbarTitle").textContent = PAGE_TITLES[page] || page;
+  
   document.querySelectorAll(".nav-item").forEach(el => {
     el.classList.toggle("active", el.dataset.page === page);
   });
+  
+  // Show/hide sidebar based on auth
+  const sidebar = document.getElementById("sidebar");
+  if (page === 'login' || page === 'signup' || page === 'reset') {
+    sidebar.style.display = 'none';
+  } else {
+    sidebar.style.display = 'flex';
+  }
+
   window._currentPage = page;
+  
   if (page === "dashboard") loadDashboard();
   if (page === "history") loadHistory();
   if (page === "profile") loadProfile();
   if (page === "correction" && data) prefillCorrection(data);
-  document.getElementById("sidebar").classList.remove("open");
+  sidebar.classList.remove("open");
 }
 
 // ---- HEALTH CHECK ----
@@ -45,6 +81,7 @@ function toggleTheme() {
 // ---- TOAST ----
 function toast(msg, type = "info") {
   const wrap = document.getElementById("toastWrap");
+  if(!wrap) return;
   const el = document.createElement("div");
   el.className = `toast ${type}`;
   const icon = type === "success" ? "✓" : type === "error" ? "✕" : "ℹ";
@@ -85,7 +122,7 @@ async function runCheck() {
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner dark"></span> Analyzing...`;
   try {
-    const r = await fetch(`${API}/api/check`, {
+    const r = await authFetch(`${API}/api/check`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, title: text.substring(0, 40) })
     });
@@ -96,7 +133,7 @@ async function runCheck() {
     displayCheckerResults(data);
     toast("Analysis complete!", "success");
   } catch (e) {
-    toast("Error: " + e.message, "error");
+    if(e.message !== "Unauthorized") toast("Error: " + e.message, "error");
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Analyze Text`;
@@ -155,14 +192,14 @@ async function handleFile(input) {
   fd.append("file", file);
   toast("Reading file...", "info");
   try {
-    const r = await fetch(`${API}/api/check-file`, { method: "POST", body: fd });
+    const r = await authFetch(`${API}/api/check-file`, { method: "POST", body: fd });
     const data = await r.json();
     _lastResult = data;
     window._lastResult = data;
     displayCheckerResults(data);
     toast(`File analyzed: ${file.name}`, "success");
   } catch (e) {
-    toast("File error: " + e.message, "error");
+    if(e.message !== "Unauthorized") toast("File error: " + e.message, "error");
   }
 }
 
@@ -200,7 +237,7 @@ async function runCorrection() {
   res.style.display = "flex";
   res.innerHTML = `<div class="card" style="text-align:center;padding:30px"><span class="spinner"></span><div style="margin-top:10px;color:var(--text2);font-size:13px">Mistral is rewriting ${sentences.length} sentence${sentences.length > 1 ? "s" : ""}...</div></div>`;
   try {
-    const r = await fetch(`${API}/api/correct`, {
+    const r = await authFetch(`${API}/api/correct`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sentences })
     });
@@ -222,8 +259,10 @@ async function runCorrection() {
     });
     toast("All sentences rewritten!", "success");
   } catch (e) {
-    res.innerHTML = `<div class="card"><div style="color:var(--high);font-size:13px">Error: ${e.message}</div></div>`;
-    toast("Correction failed", "error");
+    if(e.message !== "Unauthorized") {
+      res.innerHTML = `<div class="card"><div style="color:var(--high);font-size:13px">Error: ${e.message}</div></div>`;
+      toast("Correction failed", "error");
+    }
   } finally {
     btn.disabled = false;
     const hBtn = document.getElementById("humanizeBtn");
@@ -249,7 +288,7 @@ async function runHumanize() {
   res.innerHTML = `<div class="card" style="text-align:center;padding:30px"><span class="spinner"></span><div style="margin-top:10px;color:var(--text2);font-size:13px">Mistral is humanizing ${sentences.length} sentence${sentences.length > 1 ? "s" : ""}...</div></div>`;
   
   try {
-    const r = await fetch(`${API}/api/humanize`, {
+    const r = await authFetch(`${API}/api/humanize`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sentences })
     });
@@ -272,15 +311,16 @@ async function runHumanize() {
     });
     toast("All sentences humanized!", "success");
   } catch (e) {
-    res.innerHTML = `<div class="card"><div style="color:var(--high);font-size:13px">Error: ${e.message}</div></div>`;
-    toast("Humanization failed", "error");
+    if(e.message !== "Unauthorized") {
+      res.innerHTML = `<div class="card"><div style="color:var(--high);font-size:13px">Error: ${e.message}</div></div>`;
+      toast("Humanization failed", "error");
+    }
   } finally {
     btn.disabled = false;
     if (corrBtn) corrBtn.disabled = false;
     btn.innerHTML = originalBtnContent;
   }
 }
-
 
 // ---- CHATBOT ----
 async function sendChat() {
@@ -292,7 +332,7 @@ async function sendChat() {
   _chatHistory.push({ role: "user", content: msg });
   const typing = appendTyping();
   try {
-    const r = await fetch(`${API}/api/chat`, {
+    const r = await authFetch(`${API}/api/chat`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages: _chatHistory })
     });
@@ -302,7 +342,7 @@ async function sendChat() {
     _chatHistory.push({ role: "assistant", content: data.reply });
   } catch (e) {
     typing.remove();
-    appendMsg("ai", "Error connecting to Ollama. Make sure it's running.");
+    if(e.message !== "Unauthorized") appendMsg("ai", "Error connecting to Ollama. Make sure it's running.");
   }
 }
 
@@ -329,7 +369,7 @@ function appendTyping() {
 // ---- DASHBOARD ----
 async function loadDashboard() {
   try {
-    const r = await fetch(`${API}/api/stats`);
+    const r = await authFetch(`${API}/api/stats`);
     const d = await r.json();
     document.getElementById("dTotal").textContent = d.total_checks;
     document.getElementById("dAvg").textContent = d.avg_score + "%";
@@ -365,7 +405,6 @@ function exportHistoryPDF(date, score) {
   };
   toast("Generating PDF...", "info");
   
-  // html2pdf requires element in DOM
   container.style.position = "absolute";
   container.style.left = "-9999px";
   document.body.appendChild(container);
@@ -382,7 +421,7 @@ function exportHistoryPDF(date, score) {
 // ---- HISTORY ----
 async function loadHistory() {
   try {
-    const r = await fetch(`${API}/api/history`);
+    const r = await authFetch(`${API}/api/history`);
     const data = await r.json();
     const el = document.getElementById("historyTable");
     if (!data.history?.length) { el.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:40px">No history yet. <a onclick="nav('checker')" style="color:var(--accent);cursor:pointer">Check your first text →</a></div>`; return; }
@@ -400,9 +439,11 @@ async function loadHistory() {
 }
 
 async function deleteHistory(id) {
-  await fetch(`${API}/api/history/${id}`, { method: "DELETE" });
-  toast("Deleted", "success");
-  loadHistory();
+  try {
+    await authFetch(`${API}/api/history/${id}`, { method: "DELETE" });
+    toast("Deleted", "success");
+    loadHistory();
+  } catch(e){}
 }
 
 // ---- REPORTS ----
@@ -413,7 +454,7 @@ async function generateReport() {
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner dark"></span> Analyzing...`;
   try {
-    const r = await fetch(`${API}/api/check`, {
+    const r = await authFetch(`${API}/api/check`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, title: "Report" })
     });
@@ -446,7 +487,7 @@ async function generateReport() {
     document.getElementById("dlBtn").style.display = "inline-flex";
     document.getElementById("pdfBtn").style.display = "inline-flex";
     toast("Report ready!", "success");
-  } catch (e) { toast("Error: " + e.message, "error"); }
+  } catch (e) { if(e.message !== "Unauthorized") toast("Error: " + e.message, "error"); }
   finally { btn.disabled = false; btn.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Analyze & Preview`; }
 }
 
@@ -456,7 +497,6 @@ function exportPDF() {
   
   toast("Generating PDF...", "info");
   
-  // Create a temporary container to render the PDF properly without dark mode styles messing it up
   const container = document.createElement("div");
   container.innerHTML = element.innerHTML;
   container.style.padding = "40px";
@@ -465,7 +505,6 @@ function exportPDF() {
   container.style.fontFamily = "Inter, sans-serif";
   container.style.width = "800px";
   
-  // Remove dark mode specific classes or variables if needed
   const cards = container.querySelectorAll('.card');
   cards.forEach(c => {
     c.style.background = "#ffffff";
@@ -481,7 +520,6 @@ function exportPDF() {
     jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
   };
   
-  // html2pdf/html2canvas requires the element to be in the DOM to render correctly
   container.style.position = "absolute";
   container.style.left = "-9999px";
   document.body.appendChild(container);
@@ -527,7 +565,7 @@ function downloadReport() {
 // ---- PROFILE ----
 async function loadProfile() {
   try {
-    const [pr, sr] = await Promise.all([fetch(`${API}/api/profile`), fetch(`${API}/api/stats`)]);
+    const [pr, sr] = await Promise.all([authFetch(`${API}/api/profile`), authFetch(`${API}/api/stats`)]);
     const p = await pr.json();
     const s = await sr.json();
     document.getElementById("profAvatar").textContent = p.avatar || "U";
@@ -548,7 +586,7 @@ async function saveProfile() {
   const email = document.getElementById("pEmail")?.value.trim();
   if (!name) { toast("Name cannot be empty", "error"); return; }
   try {
-    const r = await fetch(`${API}/api/profile`, {
+    const r = await authFetch(`${API}/api/profile`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email })
     });
@@ -561,7 +599,106 @@ async function saveProfile() {
   } catch { toast("Save failed", "error"); }
 }
 
-function doLogin() { toast("Welcome back! (Demo mode)", "success"); nav("home"); }
+// ---- AUTH ----
+async function doLogin() {
+  const email = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPass").value.trim();
+  if(!email || !password) { toast("Please enter email and password", "error"); return; }
+  
+  const btn = document.getElementById("loginBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner dark"></span> Signing In...`;
+  
+  try {
+    const r = await fetch(`${API}/api/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    if(!r.ok) {
+      const e = await r.json();
+      throw new Error(e.detail || "Login failed");
+    }
+    const data = await r.json();
+    setToken(data.token);
+    toast("Welcome back!", "success");
+    nav("home");
+    // Initial profile load
+    document.getElementById("avatarNav").textContent = data.user.avatar || "U";
+    document.getElementById("nameNav").textContent = data.user.name || "My Profile";
+  } catch(e) {
+    toast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "Sign In";
+  }
+}
+
+async function doSignup() {
+  const name = document.getElementById("suName").value.trim();
+  const email = document.getElementById("suEmail").value.trim();
+  const password = document.getElementById("suPass").value.trim();
+  if(!name || !email || !password) { toast("Please fill all fields", "error"); return; }
+  
+  const btn = document.getElementById("signupBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner dark"></span> Creating...`;
+  
+  try {
+    const r = await fetch(`${API}/api/signup`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password })
+    });
+    if(!r.ok) {
+      const e = await r.json();
+      throw new Error(e.detail || "Signup failed");
+    }
+    const data = await r.json();
+    setToken(data.token);
+    toast("Account created!", "success");
+    nav("home");
+    document.getElementById("avatarNav").textContent = data.user.avatar || "U";
+    document.getElementById("nameNav").textContent = data.user.name || "My Profile";
+  } catch(e) {
+    toast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "Create Account";
+  }
+}
+
+async function doResetPassword() {
+  const email = document.getElementById("resetEmail").value.trim();
+  const password = document.getElementById("resetPass").value.trim();
+  if(!email || !password) { toast("Please fill all fields", "error"); return; }
+  
+  const btn = document.getElementById("resetBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner dark"></span> Resetting...`;
+  
+  try {
+    const r = await fetch(`${API}/api/reset-password`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, new_password: password })
+    });
+    if(!r.ok) {
+      const e = await r.json();
+      throw new Error(e.detail || "Failed to reset password");
+    }
+    toast("Password updated! Please sign in.", "success");
+    nav("login");
+  } catch(e) {
+    toast(e.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "Update Password";
+  }
+}
+
+function doLogout() {
+  removeToken();
+  toast("Logged out successfully", "success");
+  nav("login");
+}
 
 // ---- UTILS ----
 function esc(str) {

@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from typing import List, Optional
 import requests
@@ -10,10 +11,16 @@ import os
 import uuid
 import datetime
 import sqlite3
+import jwt
+import bcrypt
 
 from nlp_engine import check_plagiarism
 
 app = FastAPI(title="WordSure API")
+
+SECRET_KEY = "wordsure-super-secret-key-change-in-prod"
+ALGORITHM = "HS256"
+DB_NAME = "Database.db"
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,10 +35,11 @@ MODEL = "mistral"
 
 # --- DB Setup ---
 def init_db():
-    conn = sqlite3.connect("wordsure.db")
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("""CREATE TABLE IF NOT EXISTS history (
         id TEXT PRIMARY KEY,
+        user_id TEXT,
         title TEXT,
         text TEXT,
         score REAL,
@@ -44,19 +52,49 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         name TEXT,
-        email TEXT,
+        email TEXT UNIQUE,
+        password TEXT,
         avatar TEXT,
         created_at TEXT
     )""")
-    # Insert demo user if not exists
-    c.execute("INSERT OR IGNORE INTO users VALUES (?,?,?,?,?)",
-        ("user1", "Tanishka Dubey", "tanishka@example.com", "TD", datetime.datetime.now().isoformat()))
     conn.commit()
     conn.close()
 
 init_db()
 
+# --- Auth Utils ---
+def get_password_hash(password):
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(plain_password, hashed_password):
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 # --- Models ---
+class SignupInput(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class LoginInput(BaseModel):
+    email: str
+    password: str
+
+class ResetPasswordInput(BaseModel):
+    email: str
+    new_password: str
+
 class TextInput(BaseModel):
     text: str
     title: Optional[str] = "Untitled"
@@ -90,25 +128,77 @@ async def health():
         ollama_ok = r.status_code == 200
     except:
         ollama_ok = False
-    conn = sqlite3.connect("wordsure.db")
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM history")
     total = c.fetchone()[0]
     conn.close()
     return {"status": "ok", "ollama": ollama_ok, "total_checks": total}
 
+@app.post("/api/signup")
+async def signup(input: SignupInput):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE email=?", (input.email,))
+    if c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    uid = str(uuid.uuid4())
+    hashed_pw = get_password_hash(input.password)
+    initials = "".join([w[0].upper() for w in input.name.split()[:2]]) if input.name else "U"
+    
+    c.execute("INSERT INTO users VALUES (?,?,?,?,?,?)", (
+        uid, input.name, input.email, hashed_pw, initials, datetime.datetime.now().isoformat()
+    ))
+    conn.commit()
+    conn.close()
+    
+    token = jwt.encode({"sub": uid}, SECRET_KEY, algorithm=ALGORITHM)
+    return {"token": token, "user": {"id": uid, "name": input.name, "email": input.email, "avatar": initials}}
+
+@app.post("/api/login")
+async def login(input: LoginInput):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT id, name, email, password, avatar FROM users WHERE email=?", (input.email,))
+    user = c.fetchone()
+    conn.close()
+    
+    if not user or not verify_password(input.password, user[3]):
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+    
+    token = jwt.encode({"sub": user[0]}, SECRET_KEY, algorithm=ALGORITHM)
+    return {"token": token, "user": {"id": user[0], "name": user[1], "email": user[2], "avatar": user[4]}}
+
+@app.post("/api/reset-password")
+async def reset_password(input: ResetPasswordInput):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT id FROM users WHERE email=?", (input.email,))
+    user = c.fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=400, detail="User not found")
+        
+    hashed_pw = get_password_hash(input.new_password)
+    c.execute("UPDATE users SET password=? WHERE email=?", (hashed_pw, input.email))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
 @app.post("/api/check")
-async def check(input: TextInput):
+async def check(input: TextInput, user_id: str = Depends(get_current_user)):
     if not input.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     result = check_plagiarism(input.text)
     # Save to history
-    conn = sqlite3.connect("wordsure.db")
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     hid = str(uuid.uuid4())[:8]
     title = input.title or input.text[:40] + "..."
-    c.execute("INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?)", (
-        hid, title, input.text[:500],
+    c.execute("INSERT INTO history VALUES (?,?,?,?,?,?,?,?,?,?)", (
+        hid, user_id, title, input.text[:500],
         result["overall_score"], result["high_risk"],
         result["medium_risk"], result["low_risk"],
         result["summary"], datetime.datetime.now().isoformat()
@@ -119,7 +209,7 @@ async def check(input: TextInput):
     return result
 
 @app.post("/api/check-file")
-async def check_file(file: UploadFile = File(...)):
+async def check_file(file: UploadFile = File(...), user_id: str = Depends(get_current_user)):
     content = await file.read()
     text = ""
     fname = file.filename.lower()
@@ -145,7 +235,7 @@ async def check_file(file: UploadFile = File(...)):
     return result
 
 @app.post("/api/correct")
-async def correct(input: CorrectInput):
+async def correct(input: CorrectInput, user_id: str = Depends(get_current_user)):
     corrected = []
     for sentence in input.sentences:
         prompt = f"""Rewrite this sentence to be completely original while keeping the same meaning. Return ONLY the rewritten sentence, no explanation.
@@ -184,7 +274,7 @@ def apply_human_formatting_rules(text: str) -> str:
     return text
 
 @app.post("/api/humanize")
-async def humanize(input: HumanizeInput):
+async def humanize(input: HumanizeInput, user_id: str = Depends(get_current_user)):
     humanized = []
     for sentence in input.sentences:
         # Phase 1 & 2: Advanced Prompting & Burstiness
@@ -225,7 +315,7 @@ Rewritten:"""
     return {"humanized": humanized}
 
 @app.post("/api/chat")
-async def chat(input: ChatInput):
+async def chat(input: ChatInput, user_id: str = Depends(get_current_user)):
     messages = [{"role": m.role, "content": m.content} for m in input.messages]
     system_msg = {
         "role": "system",
@@ -246,34 +336,34 @@ async def chat(input: ChatInput):
         raise HTTPException(status_code=503, detail="Ollama is not running")
 
 @app.get("/api/history")
-async def get_history():
-    conn = sqlite3.connect("wordsure.db")
+async def get_history(user_id: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT * FROM history ORDER BY created_at DESC LIMIT 50")
+    c.execute("SELECT * FROM history WHERE user_id=? ORDER BY created_at DESC LIMIT 50", (user_id,))
     rows = c.fetchall()
     conn.close()
     return {"history": [
-        {"id": r[0], "title": r[1], "score": r[3], "high_risk": r[4],
-         "medium_risk": r[5], "low_risk": r[6], "summary": r[7], "created_at": r[8]}
+        {"id": r[0], "title": r[2], "score": r[4], "high_risk": r[5],
+         "medium_risk": r[6], "low_risk": r[7], "summary": r[8], "created_at": r[9]}
         for r in rows
     ]}
 
 @app.delete("/api/history/{hid}")
-async def delete_history(hid: str):
-    conn = sqlite3.connect("wordsure.db")
+async def delete_history(hid: str, user_id: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("DELETE FROM history WHERE id=?", (hid,))
+    c.execute("DELETE FROM history WHERE id=? AND user_id=?", (hid, user_id))
     conn.commit()
     conn.close()
     return {"deleted": True}
 
 @app.get("/api/stats")
-async def get_stats():
-    conn = sqlite3.connect("wordsure.db")
+async def get_stats(user_id: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT COUNT(*), AVG(score), AVG(high_risk), AVG(medium_risk), AVG(low_risk) FROM history")
+    c.execute("SELECT COUNT(*), AVG(score), AVG(high_risk), AVG(medium_risk), AVG(low_risk) FROM history WHERE user_id=?", (user_id,))
     row = c.fetchone()
-    c.execute("SELECT score, created_at FROM history ORDER BY created_at DESC LIMIT 7")
+    c.execute("SELECT score, created_at FROM history WHERE user_id=? ORDER BY created_at DESC LIMIT 7", (user_id,))
     recent = c.fetchall()
     conn.close()
     return {
@@ -286,23 +376,23 @@ async def get_stats():
     }
 
 @app.get("/api/profile")
-async def get_profile():
-    conn = sqlite3.connect("wordsure.db")
+async def get_profile(user_id: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE id='user1'")
+    c.execute("SELECT * FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
     conn.close()
     if row:
-        return {"id": row[0], "name": row[1], "email": row[2], "avatar": row[3], "created_at": row[4]}
-    return {"id": "user1", "name": "User", "email": "", "avatar": "U"}
+        return {"id": row[0], "name": row[1], "email": row[2], "avatar": row[4], "created_at": row[5]}
+    raise HTTPException(status_code=404, detail="User not found")
 
 @app.put("/api/profile")
-async def update_profile(data: ProfileUpdate):
-    initials = "".join([w[0].upper() for w in data.name.split()[:2]])
-    conn = sqlite3.connect("wordsure.db")
+async def update_profile(data: ProfileUpdate, user_id: str = Depends(get_current_user)):
+    initials = "".join([w[0].upper() for w in data.name.split()[:2]]) if data.name else "U"
+    conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("UPDATE users SET name=?, email=?, avatar=? WHERE id='user1'",
-              (data.name, data.email, initials))
+    c.execute("UPDATE users SET name=?, email=?, avatar=? WHERE id=?",
+              (data.name, data.email, initials, user_id))
     conn.commit()
     conn.close()
     return {"success": True, "avatar": initials}
