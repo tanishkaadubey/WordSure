@@ -13,6 +13,9 @@ import datetime
 import sqlite3
 import jwt
 import bcrypt
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from nlp_engine import check_plagiarism
 
@@ -29,9 +32,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
-MODEL = "mistral"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.1-8b-instant"
 
 # --- DB Setup ---
 def init_db():
@@ -123,17 +126,13 @@ async def root():
 
 @app.get("/api/health")
 async def health():
-    try:
-        r = requests.get("http://localhost:11434/api/tags", timeout=3)
-        ollama_ok = r.status_code == 200
-    except:
-        ollama_ok = False
+    groq_ok = bool(GROQ_API_KEY)
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM history")
     total = c.fetchone()[0]
     conn.close()
-    return {"status": "ok", "ollama": ollama_ok, "total_checks": total}
+    return {"status": "ok", "ollama": groq_ok, "provider": "groq", "total_checks": total}
 
 @app.post("/api/signup")
 async def signup(input: SignupInput):
@@ -237,6 +236,10 @@ async def check_file(file: UploadFile = File(...), user_id: str = Depends(get_cu
 @app.post("/api/correct")
 async def correct(input: CorrectInput, user_id: str = Depends(get_current_user)):
     corrected = []
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
     for sentence in input.sentences:
         prompt = f"""Rewrite this sentence to be completely original while keeping the same meaning. Return ONLY the rewritten sentence, no explanation.
 
@@ -244,11 +247,15 @@ Sentence: {sentence}
 
 Rewritten:"""
         try:
-            response = requests.post(OLLAMA_URL, json={
-                "model": MODEL, "prompt": prompt, "stream": False
-            }, timeout=180)
+            payload = {
+                "model": GROQ_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2,
+                "stream": False
+            }
+            response = requests.post(GROQ_URL, headers=headers, json=payload, timeout=30)
             if response.status_code == 200:
-                result = response.json().get("response", sentence).strip()
+                result = response.json()["choices"][0]["message"]["content"].strip()
                 corrected.append({"original": sentence, "corrected": result})
             else:
                 corrected.append({"original": sentence, "corrected": sentence})
@@ -276,6 +283,10 @@ def apply_human_formatting_rules(text: str) -> str:
 @app.post("/api/humanize")
 async def humanize(input: HumanizeInput, user_id: str = Depends(get_current_user)):
     humanized = []
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
     for sentence in input.sentences:
         # Phase 1 & 2: Advanced Prompting & Burstiness
         prompt = f"""You are an expert human copywriter. Rewrite this text to sound completely natural and human-like. 
@@ -292,17 +303,16 @@ Text: {sentence}
 Rewritten:"""
         try:
             # High temperature for more randomness
-            response = requests.post(OLLAMA_URL, json={
-                "model": MODEL, 
-                "prompt": prompt, 
-                "stream": False,
-                "options": {
-                    "temperature": 0.95,
-                    "top_p": 0.95
-                }
-            }, timeout=180)
+            payload = {
+                "model": GROQ_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.95,
+                "top_p": 0.95,
+                "stream": False
+            }
+            response = requests.post(GROQ_URL, headers=headers, json=payload, timeout=30)
             if response.status_code == 200:
-                result = response.json().get("response", sentence).strip()
+                result = response.json()["choices"][0]["message"]["content"].strip()
                 
                 # Phase 3: Programmatic cleanup
                 result = apply_human_formatting_rules(result)
@@ -321,19 +331,25 @@ async def chat(input: ChatInput, user_id: str = Depends(get_current_user)):
         "role": "system",
         "content": "You are WordSure AI, an expert writing assistant specializing in plagiarism detection, academic integrity, paraphrasing, and creative writing. Be helpful, concise, and friendly. Use bullet points when listing things."
     }
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
     try:
-        response = requests.post(OLLAMA_CHAT_URL, json={
-            "model": MODEL,
+        payload = {
+            "model": GROQ_MODEL,
             "messages": [system_msg] + messages,
+            "temperature": 0.7,
             "stream": False
-        }, timeout=90)
+        }
+        response = requests.post(GROQ_URL, headers=headers, json=payload, timeout=30)
         if response.status_code == 200:
-            reply = response.json()["message"]["content"]
+            reply = response.json()["choices"][0]["message"]["content"]
             return {"reply": reply}
         else:
-            raise HTTPException(status_code=500, detail="Ollama error")
+            raise HTTPException(status_code=500, detail="Groq API error")
     except requests.exceptions.ConnectionError:
-        raise HTTPException(status_code=503, detail="Ollama is not running")
+        raise HTTPException(status_code=503, detail="Groq API is not reachable")
 
 @app.get("/api/history")
 async def get_history(user_id: str = Depends(get_current_user)):

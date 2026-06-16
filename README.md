@@ -1,12 +1,12 @@
 # WordSure — AI Plagiarism Detector & Corrector
 
-> A free, local, AI-powered plagiarism detection and correction tool built with FastAPI, Sentence Transformers, and Mistral AI via Ollama.
+> A free, AI-powered plagiarism detection and correction tool built with FastAPI, Sentence Transformers, and Groq Cloud AI.
 
 ---
 
 ## What is WordSure?
 
-WordSure is a full-stack web application that helps you detect plagiarism in your text, rewrite flagged sentences using AI, and get writing advice through a built-in chatbot — all running locally on your machine with zero cost.
+WordSure is a full-stack web application that helps you detect plagiarism in your text, rewrite flagged sentences using AI, and get writing advice through a built-in chatbot — combining high-performance local NLP similarity analysis with lightning-fast cloud AI rewriting.
 
 ---
 
@@ -14,7 +14,7 @@ WordSure is a full-stack web application that helps you detect plagiarism in you
 
 - **Plagiarism Detection** — Sentence-level NLP analysis with similarity scoring (0–100%)
 - **Color Coding** — Red (high risk), Yellow (medium risk), Green (original)
-- **AI Correction** — Mistral AI rewrites flagged sentences to be original
+- **AI Correction** — Groq AI rewrites flagged sentences to be original
 - **Side-by-Side View** — Original vs AI-rewritten text comparison
 - **AI Chatbot** — Ask anything about plagiarism and academic writing
 - **File Upload** — Supports `.txt` and `.pdf` files
@@ -25,8 +25,8 @@ WordSure is a full-stack web application that helps you detect plagiarism in you
 - **Dark / Light Mode** — Toggle from the top bar
 - **Progress Bar** — Visual plagiarism level indicator
 - **Copy Button** — Copy corrected text in one click
-- **100% Local** — No data sent to any server, everything runs on your machine
-- **Completely Free** — No API keys, no subscriptions
+- **Hybrid Performance** — Fast local NLP combined with instant cloud-hosted AI completions
+- **Completely Free** — Uses Groq's high-speed free tier
 
 ---
 
@@ -37,7 +37,7 @@ WordSure is a full-stack web application that helps you detect plagiarism in you
 | Backend | FastAPI (Python) |
 | NLP Engine | Sentence Transformers (all-MiniLM-L6-v2) |
 | Similarity | Scikit-learn (Cosine Similarity) |
-| LLM / Chatbot | Mistral via Ollama (local) |
+| LLM / Chatbot | Groq Cloud API (Llama 3.1) |
 | Database | SQLite |
 | Frontend | HTML + CSS + Vanilla JavaScript |
 | Fonts | Syne, DM Mono, Inter (Google Fonts) |
@@ -71,7 +71,7 @@ WordSure/
 | Dashboard | Stats, recent activity, quick actions |
 | Plagiarism Checker | Main text analysis tool with file upload |
 | AI Correction | Side-by-side AI rewriting of flagged sentences |
-| AI Chatbot | Mistral-powered writing assistant |
+| AI Chatbot | Groq Llama 3.1-powered writing assistant |
 | History | All past plagiarism checks with delete option |
 | Reports | Generate and download detailed reports |
 | About | How it works, tech stack, features |
@@ -85,7 +85,8 @@ WordSure/
 Make sure these are installed before running:
 
 1. **Python 3.10 or above** — [python.org/downloads](https://www.python.org/downloads/)
-2. **Ollama** — [ollama.com/download](https://ollama.com/download)
+2. **Groq API Key** — Sign up for a free key at [console.groq.com](https://console.groq.com/)
+3. **Serper API Key** — Sign up for a free Google Search API key at [serper.dev](https://serper.dev/)
 
 ---
 
@@ -93,11 +94,11 @@ Make sure these are installed before running:
 
 ### Step 1 — Clone or Extract the Project
 
-Extract `WordSure_v2.zip` to any folder, then open that folder in VS Code.
+Extract the project files to a folder and open that folder in VS Code.
 
 ### Step 2 — Create Virtual Environment
 
-Open the terminal in VS Code (`Ctrl + `` `) and run:
+Open the terminal in VS Code (`Ctrl + ` `) and run:
 
 ```bash
 python -m venv venv
@@ -121,40 +122,29 @@ You should see `(venv)` at the start of your terminal line.
 pip install -r requirements.txt
 ```
 
-This will take 3–5 minutes the first time (downloads ~500MB of ML libraries).
+This installs the backend web framework, machine learning NLP library, and environment config tools.
 
-### Step 5 — Setup Ollama (One Time Only)
+### Step 5 — Set Up Environment Variables
 
-Open a **separate** Command Prompt window and run:
+Create a file named `.env` in the root folder (same directory as `main.py`) and fill it with your API keys:
+
+```ini
+GROQ_API_KEY=your_groq_api_key_here
+SERPER_API_KEY=your_serper_api_key_here
+```
+
+### Step 6 — Run the App
+
+In the VS Code terminal (with the virtual environment activated):
 
 ```bash
-ollama pull mistral
+python -m uvicorn main:app --reload --port 8000
 ```
 
-This downloads the Mistral AI model (~4GB). Only needed once.
-
-### Step 6 — Start Ollama
-
-Keep this Command Prompt open and running:
-
-```bash
-ollama serve
-```
-
-> If you see `bind: Only one usage of each socket address` — Ollama is already running in the background. That is fine, proceed to Step 7.
-
-### Step 7 — Run the App
-
-Back in VS Code terminal (with venv activated):
-
-```bash
-uvicorn main:app --reload --port 8000
-```
-
-### Step 8 — Open in Browser
+### Step 7 — Open in Browser
 
 ```
-http://localhost:8000
+http://127.0.0.1:8000
 ```
 
 WordSure is now running!
@@ -180,7 +170,7 @@ High (≥75%) → Red    Medium (45–75%) → Yellow    Low (<45%) → Green
        ↓
 User clicks "Fix with AI"
        ↓
-Flagged sentences sent to Mistral via Ollama
+Flagged sentences sent to Groq Cloud API (Llama 3.1)
        ↓
 AI rewrites sentences to be original
        ↓
@@ -193,7 +183,7 @@ Side-by-side comparison shown
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/health` | Check if server and Ollama are running |
+| GET | `/api/health` | Check if server and Groq API are ready |
 | POST | `/api/check` | Analyze text for plagiarism |
 | POST | `/api/check-file` | Analyze uploaded .txt or .pdf file |
 | POST | `/api/correct` | AI rewrite of flagged sentences |
@@ -210,28 +200,20 @@ Side-by-side comparison shown
 
 | Error | Cause | Fix |
 |---|---|---|
-| `ollama is not recognized` | Ollama not installed or PC not restarted | Install Ollama, restart PC |
-| `bind: Only one usage of each socket address` | Ollama already running | This is fine, ignore it |
-| `Connection refused` on localhost:8000 | uvicorn not running | Run `uvicorn main:app --reload --port 8000` |
+| `Connection refused` on localhost:8000 | uvicorn not running | Run `python -m uvicorn main:app --reload --port 8000` |
 | `Module not found` | venv not activated | Run `venv\Scripts\activate` first |
 | Slow first load | Sentence Transformers model loading | Wait 30–60 seconds, normal on first run |
-| Chatbot not responding | Ollama offline | Make sure `ollama serve` is running in CMD |
+| API / LLM errors | Missing or invalid API keys | Make sure `GROQ_API_KEY` and `SERPER_API_KEY` are correct in the `.env` file |
 
 ---
 
 ## Deployment
 
-### Local Development (Default)
-Everything runs on `http://localhost:8000` — no setup needed beyond the steps above.
+WordSure is fully configured for easy cloud deployment:
 
-### Deploy Online (Free)
-
-For online deployment, replace Ollama with Groq API (free tier):
-
-1. Get free API key at [console.groq.com](https://console.groq.com)
-2. In `main.py`, replace the Ollama `requests.post` calls with the Groq Python client
-3. Deploy backend to [Render.com](https://render.com) (free tier — 750 hrs/month)
-4. Deploy frontend to [Vercel.com](https://vercel.com) (free forever)
+1. **API Keys**: Make sure to configure `GROQ_API_KEY` and `SERPER_API_KEY` as environment variables on your cloud provider.
+2. **Backend**: You can deploy the FastAPI application on [Render.com](https://render.com) or [Heroku](https://www.heroku.com/).
+3. **Frontend**: The static assets can be deployed to [Vercel](https://vercel.com), [Netlify](https://www.netlify.com/), or served directly from the backend.
 
 ---
 
@@ -239,8 +221,7 @@ For online deployment, replace Ollama with Groq API (free tier):
 
 - [FastAPI](https://fastapi.tiangolo.com/) — Modern Python web framework
 - [Sentence Transformers](https://www.sbert.net/) — NLP sentence embeddings
-- [Ollama](https://ollama.com/) — Run LLMs locally
-- [Mistral](https://mistral.ai/) — Open source LLM for text rewriting
+- [Groq Cloud API](https://groq.com/) — Fast AI completions and rewriting
 - [SQLite](https://www.sqlite.org/) — Lightweight local database
 
 ---
@@ -255,4 +236,4 @@ Free to use for educational and personal projects.
 
 **Tanishka Dubey**
 WordSure — AI Plagiarism Detector
-Built with FastAPI + Sentence Transformers + Mistral AI
+Built with FastAPI + Sentence Transformers + Groq AI

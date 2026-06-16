@@ -4,7 +4,7 @@ home: () => `<div class="page">
   <div style="max-width:900px;margin:0 auto">
     <div style="text-align:center;padding:48px 0 40px">
       <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:20px;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.2);font-size:12px;color:var(--accent);font-family:var(--font-m);margin-bottom:20px">
-        Powered by Mistral AI + Sentence Transformers
+        Powered by Groq AI + Sentence Transformers
       </div>
       <h1 style="font-family:var(--font-d);font-size:52px;font-weight:800;line-height:1.15;margin-bottom:16px">
         Detect Plagiarism<br><span style="color:var(--accent)">Instantly.</span>
@@ -36,7 +36,7 @@ home: () => `<div class="page">
           <svg width="24" height="24" fill="none" stroke="#a78bfa" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
         </div>
         <div class="card-title">AI Rewriting</div>
-        <div class="card-sub" style="margin-top:6px">Mistral AI rewrites flagged sentences instantly</div>
+        <div class="card-sub" style="margin-top:6px">Groq AI rewrites flagged sentences instantly</div>
       </div>
       <div class="card" style="text-align:center;padding:28px 20px">
         <div style="width:48px;height:48px;border-radius:12px;background:rgba(16,185,129,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
@@ -226,7 +226,7 @@ chatbot: () => `<div class="page" style="height:calc(100vh - var(--header) - 48p
     <div class="chat-msgs" id="chatMsgs">
       <div class="msg ai">
         <div class="bubble">
-          <strong>Hi! I'm WordSure AI</strong> powered by Mistral.<br><br>
+          <strong>Hi! I'm WordSure AI</strong> powered by Groq.<br><br>
           I can help you with:<br>
           • Understanding plagiarism rules<br>
           • Paraphrasing tips<br>
@@ -290,7 +290,7 @@ about: () => `<div class="page">
       <div class="logo-icon" style="width:56px;height:56px;border-radius:14px;font-size:28px;margin:0 auto 16px"></div>
       <h2 style="font-family:var(--font-d);font-size:28px;font-weight:800;margin-bottom:8px">About WordSure</h2>
       <p style="color:var(--text2);font-size:14px;line-height:1.7;max-width:500px;margin:0 auto">
-        WordSure is a free, local AI-powered plagiarism detector built with FastAPI, Sentence Transformers, and Mistral AI via Ollama.
+        WordSure is a free, AI-powered plagiarism detector built with FastAPI, Sentence Transformers, and Groq AI.
       </p>
     </div>
 
@@ -300,18 +300,18 @@ about: () => `<div class="page">
         <div class="t-item"><div class="t-dot"></div><div class="t-title">Text Input</div><div class="t-body">You paste text or upload a file. WordSure splits it into individual sentences for analysis.</div></div>
         <div class="t-item"><div class="t-dot" style="background:var(--accent2);box-shadow:0 0 12px var(--accent2)"></div><div class="t-title">NLP Analysis</div><div class="t-body">Sentence Transformers (all-MiniLM-L6-v2) converts each sentence into a vector embedding and compares it against a reference database using cosine similarity.</div></div>
         <div class="t-item"><div class="t-dot" style="background:var(--medium);box-shadow:0 0 12px var(--medium)"></div><div class="t-title">Similarity Scoring</div><div class="t-body">Each sentence gets a similarity score. Above 75% = high risk (red), 45-75% = medium (yellow), below 45% = original (green).</div></div>
-        <div class="t-item"><div class="t-dot" style="background:var(--low);box-shadow:0 0 12px var(--low)"></div><div class="t-title">AI Correction</div><div class="t-body">Flagged sentences are sent to Mistral AI (running locally via Ollama) which rewrites them to be completely original.</div></div>
+        <div class="t-item"><div class="t-dot" style="background:var(--low);box-shadow:0 0 12px var(--low)"></div><div class="t-title">AI Correction</div><div class="t-body">Flagged sentences are sent to Groq AI which rewrites them to be completely original.</div></div>
       </div>
     </div>
 
     <div class="grid-2">
       <div class="card">
         <div class="card-title" style="margin-bottom:12px">Tech Stack</div>
-        ${[['FastAPI','Python backend framework'],['Sentence Transformers','NLP similarity engine'],['Mistral via Ollama','Local LLM for rewriting'],['SQLite','History & data storage'],['Vanilla JS','Lightweight frontend']].map(([t,d])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-family:var(--font-m);color:var(--accent)">${t}</span><span style="color:var(--text2)">${d}</span></div>`).join('')}
+        ${[['FastAPI','Python backend framework'],['Sentence Transformers','NLP similarity engine'],['Groq API','Cloud LLM for rewriting'],['SQLite','History & data storage'],['Vanilla JS','Lightweight frontend']].map(([t,d])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-family:var(--font-m);color:var(--accent)">${t}</span><span style="color:var(--text2)">${d}</span></div>`).join('')}
       </div>
       <div class="card">
         <div class="card-title" style="margin-bottom:12px">Features</div>
-        ${['Sentence-level plagiarism detection','AI-powered text rewriting','Built-in chatbot assistant','File upload (.txt, .pdf)','Check history & reports','100% local — no data sent online','Free forever — no API keys'].map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><svg width="14" height="14" fill="none" stroke="var(--low)" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>${f}</div>`).join('')}
+        ${['Sentence-level plagiarism detection','AI-powered text rewriting','Built-in chatbot assistant','File upload (.txt, .pdf)','Check history & reports','Hybrid local NLP & Cloud AI','Free & fast AI integration'].map(f=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><svg width="14" height="14" fill="none" stroke="var(--low)" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>${f}</div>`).join('')}
       </div>
     </div>
   </div>

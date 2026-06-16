@@ -62,8 +62,14 @@ async function checkHealth() {
     const d = await r.json();
     const dot = document.getElementById("statusDot");
     const txt = document.getElementById("statusTxt");
-    if (d.ollama) { dot.className = "dot on"; txt.textContent = "Ollama ready"; }
-    else { dot.className = "dot off"; txt.textContent = "Ollama offline"; }
+    if (d.ollama) { 
+      dot.className = "dot on"; 
+      txt.textContent = d.provider === "groq" ? "Groq ready" : "Ollama ready"; 
+    }
+    else { 
+      dot.className = "dot off"; 
+      txt.textContent = d.provider === "groq" ? "Groq offline" : "Ollama offline"; 
+    }
   } catch {
     document.getElementById("statusDot").className = "dot off";
     document.getElementById("statusTxt").textContent = "Server offline";
@@ -235,7 +241,7 @@ async function runCorrection() {
   document.getElementById("corrEmpty").style.display = "none";
   const res = document.getElementById("corrResults");
   res.style.display = "flex";
-  res.innerHTML = `<div class="card" style="text-align:center;padding:30px"><span class="spinner"></span><div style="margin-top:10px;color:var(--text2);font-size:13px">Mistral is rewriting ${sentences.length} sentence${sentences.length > 1 ? "s" : ""}...</div></div>`;
+  res.innerHTML = `<div class="card" style="text-align:center;padding:30px"><span class="spinner"></span><div style="margin-top:10px;color:var(--text2);font-size:13px">Groq AI is rewriting ${sentences.length} sentence${sentences.length > 1 ? "s" : ""}...</div></div>`;
   try {
     const r = await authFetch(`${API}/api/correct`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -285,7 +291,7 @@ async function runHumanize() {
   document.getElementById("corrEmpty").style.display = "none";
   const res = document.getElementById("corrResults");
   res.style.display = "flex";
-  res.innerHTML = `<div class="card" style="text-align:center;padding:30px"><span class="spinner"></span><div style="margin-top:10px;color:var(--text2);font-size:13px">Mistral is humanizing ${sentences.length} sentence${sentences.length > 1 ? "s" : ""}...</div></div>`;
+  res.innerHTML = `<div class="card" style="text-align:center;padding:30px"><span class="spinner"></span><div style="margin-top:10px;color:var(--text2);font-size:13px">Groq AI is humanizing ${sentences.length} sentence${sentences.length > 1 ? "s" : ""}...</div></div>`;
   
   try {
     const r = await authFetch(`${API}/api/humanize`, {
@@ -342,7 +348,7 @@ async function sendChat() {
     _chatHistory.push({ role: "assistant", content: data.reply });
   } catch (e) {
     typing.remove();
-    if(e.message !== "Unauthorized") appendMsg("ai", "Error connecting to Ollama. Make sure it's running.");
+    if(e.message !== "Unauthorized") appendMsg("ai", "Error connecting to Groq AI. Make sure your API key is valid and you have internet access.");
   }
 }
 
