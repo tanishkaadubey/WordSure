@@ -1,4 +1,15 @@
+---
+title: WordSure
+emoji: 📝
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # WordSure — AI Plagiarism Detector & Corrector
+
 
 > A free, AI-powered plagiarism detection and correction tool built with FastAPI, Sentence Transformers, and Groq Cloud AI.
 
