@@ -10,6 +10,7 @@ pinned: false
 
 # WordSure — AI Plagiarism Detector & Corrector
 
+**🚀 Live Demo:** [https://doctor-strange-wordsure.hf.space](https://doctor-strange-wordsure.hf.space)
 
 > A free, AI-powered plagiarism detection and correction tool built with FastAPI, Sentence Transformers, and Groq Cloud AI.
 
